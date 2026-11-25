@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { AnalyticsView } from "./components/AnalyticsView";
-import { AssistantView } from "./components/AssistantView";
-import { EnquiriesView } from "./components/EnquiriesView";
-import { MediaStudioView } from "./components/MediaStudioView";
-import { OverviewView } from "./components/OverviewView";
-import { Sidebar } from "./components/Sidebar";
-import { TasksView } from "./components/TasksView";
-import { TopBar } from "./components/TopBar";
-import { WorkflowsView } from "./components/WorkflowsView";
+import { AnalyticsView } from "./Components/AnalyticsView";
+import { AssistantView } from "./Components/AssistantView";
+import { EnquiriesView } from "./Components/EnquiriesView";
+import { MediaStudioView } from "./Components/MediaStudioView";
+import { OverviewView } from "./Components/OverviewView";
+import { Sidebar } from "./Components/Sidebar";
+import { TasksView } from "./Components/TasksView";
+import { TopBar } from "./Components/TopBar";
+import { WorkflowsView } from "./Components/WorkflowsView";
 import {
   INDUSTRIES,
   INITIAL_ENQUIRIES,

@@ -1,0 +1,6 @@
+{
+  "name": "NEXA AI SYSTEMS",
+  "description": "AI-powered business automation platform for customer enquiries, task orchestration, workflow automation, analytics, and media synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

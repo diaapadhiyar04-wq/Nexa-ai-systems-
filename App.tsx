@@ -1,0 +1,554 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
+import { AnalyticsView } from "./components/AnalyticsView";
+import { AssistantView } from "./components/AssistantView";
+import { EnquiriesView } from "./components/EnquiriesView";
+import { MediaStudioView } from "./components/MediaStudioView";
+import { OverviewView } from "./components/OverviewView";
+import { Sidebar } from "./components/Sidebar";
+import { TasksView } from "./components/TasksView";
+import { TopBar } from "./components/TopBar";
+import { WorkflowsView } from "./components/WorkflowsView";
+import {
+  INDUSTRIES,
+  INITIAL_ENQUIRIES,
+  INITIAL_EXECUTION_LOGS,
+  INITIAL_TASKS,
+  INITIAL_WORKFLOWS,
+  TEAM_MEMBERS,
+} from "./data/demoData";
+import {
+  AssistantMessage,
+  Enquiry,
+  ExecutionLog,
+  IndustryId,
+  TaskItem,
+  ViewId,
+  WorkflowRule,
+} from "./types";
+
+export default function App() {
+  const [activeView, setActiveView] = useState<ViewId>("overview");
+  const [selectedIndustry, setSelectedIndustry] = useState<IndustryId | "all">("all");
+  const [darkMode, setDarkMode] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(INITIAL_ENQUIRIES);
+  const [selectedEnquiryId, setSelectedEnquiryId] = useState<string | null>(
+    INITIAL_ENQUIRIES[0]?.id ?? null
+  );
+  const [tasks, setTasks] = useState<TaskItem[]>(INITIAL_TASKS);
+  const [workflows, setWorkflows] = useState<WorkflowRule[]>(INITIAL_WORKFLOWS);
+  const [executionLogs, setExecutionLogs] =
+    useState<ExecutionLog[]>(INITIAL_EXECUTION_LOGS);
+
+  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
+    {
+      id: "msg-welcome",
+      role: "assistant",
+      text: "Welcome to NEXA AI SYSTEMS. I have full context on your open customer enquiries, task queue, and workflow automations. Ask me to triage urgent requests, draft operational plans, or design a new workflow rule.",
+      timestamp: "09:15",
+    },
+  ]);
+
+  const [toast, setToast] = useState<string | null>(null);
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDept, setNewTaskDept] = useState("Operations");
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskItem["priority"]>("High");
+  const [newTaskAssignee, setNewTaskAssignee] = useState(TEAM_MEMBERS[0].id);
+  const [newTaskDue, setNewTaskDue] = useState("Tomorrow, 15:00");
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const activeIndustryLabel = useMemo(() => {
+    if (selectedIndustry === "all") return "All Industries";
+    return (
+      INDUSTRIES.find((i) => i.id === selectedIndustry)?.label || "All Industries"
+    );
+  }, [selectedIndustry]);
+
+  const fallbackIndustry: IndustryId =
+    selectedIndustry === "all" ? "logistics" : selectedIndustry;
+
+  const visibleEnquiries = useMemo(
+    () =>
+      selectedIndustry === "all"
+        ? enquiries
+        : enquiries.filter((e) => e.industry === selectedIndustry),
+    [enquiries, selectedIndustry]
+  );
+
+  const visibleTasks = useMemo(
+    () =>
+      selectedIndustry === "all"
+        ? tasks
+        : tasks.filter((t) => t.industry === selectedIndustry),
+    [tasks, selectedIndustry]
+  );
+
+  const visibleWorkflows = useMemo(
+    () =>
+      selectedIndustry === "all"
+        ? workflows
+        : workflows.filter((w) => w.industry === selectedIndustry),
+    [workflows, selectedIndustry]
+  );
+
+  const openEnquiriesCount = visibleEnquiries.filter(
+    (e) => e.status !== "Resolved"
+  ).length;
+  const pendingTasksCount = visibleTasks.filter((t) => t.status !== "Done").length;
+
+  const handleUpdateEnquiryStatus = (id: string, status: Enquiry["status"]) => {
+    setEnquiries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, status } : e))
+    );
+    setToast(`Updated enquiry ${id} to ${status}`);
+  };
+
+  const handleSendReply = (id: string, body: string) => {
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    setEnquiries((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              status: e.status === "Open" ? "In Progress" : e.status,
+              messages: [
+                ...e.messages,
+                {
+                  id: `m-${Date.now()}`,
+                  sender: "Elena Vance (Simulated Outbound)",
+                  role: "team",
+                  body,
+                  timestamp,
+                },
+              ],
+            }
+          : e
+      )
+    );
+    setToast(`Simulated reply logged on ${id}`);
+  };
+
+  const handleConvertToTask = (enquiry: Enquiry) => {
+    const nextId = `TSK-${200 + tasks.length + 1}`;
+    const created: TaskItem = {
+      id: nextId,
+      title: `Resolve ${enquiry.company}: ${enquiry.subject}`,
+      department: "Customer Ops",
+      priority: enquiry.priority,
+      status: "To Do",
+      assigneeId: enquiry.assignedToId,
+      dueDate: "Today, 17:00",
+      automatedSource: `Enquiry ${enquiry.id}`,
+      industry: enquiry.industry,
+      subtasks: [],
+    };
+    setTasks((prev) => [created, ...prev]);
+    setToast(`Created task ${nextId} from ${enquiry.id}`);
+  };
+
+  const handleAddEnquiry = (
+    payload: Omit<Enquiry, "id" | "receivedAt" | "slaMinutesLeft">
+  ) => {
+    const nextId = `ENQ-${4081 + enquiries.length}`;
+    const created: Enquiry = {
+      ...payload,
+      id: nextId,
+      receivedAt: "Just now",
+      slaMinutesLeft: payload.priority === "Urgent" ? 60 : 180,
+    };
+    setEnquiries((prev) => [created, ...prev]);
+    setSelectedEnquiryId(nextId);
+    setToast(`Added sample enquiry ${nextId}`);
+  };
+
+  const handleUpdateTaskStatus = (id: string, status: TaskItem["status"]) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status } : t))
+    );
+  };
+
+  const handleToggleSubtask = (taskId: string, subtaskId: string) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subtasks: t.subtasks.map((st) =>
+                st.id === subtaskId ? { ...st, done: !st.done } : st
+              ),
+            }
+          : t
+      )
+    );
+  };
+
+  const handleAddSubtasks = (taskId: string, subtasks: string[]) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subtasks: [
+                ...t.subtasks,
+                ...subtasks.map((text, idx) => ({
+                  id: `st-${Date.now()}-${idx}`,
+                  text,
+                  done: false,
+                })),
+              ],
+            }
+          : t
+      )
+    );
+    setToast(`Added ${subtasks.length} AI subtasks`);
+  };
+
+  const handleDeleteTask = (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setToast(`Removed task ${id}`);
+  };
+
+  const handleCreateTaskSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    const nextId = `TSK-${200 + tasks.length + 1}`;
+    setTasks((prev) => [
+      {
+        id: nextId,
+        title: newTaskTitle.trim(),
+        department: newTaskDept.trim() || "Operations",
+        priority: newTaskPriority,
+        status: "To Do",
+        assigneeId: newTaskAssignee,
+        dueDate: newTaskDue.trim() || "Tomorrow",
+        industry: fallbackIndustry,
+        subtasks: [],
+      },
+      ...prev,
+    ]);
+    setNewTaskTitle("");
+    setShowNewTaskModal(false);
+    setToast(`Created task ${nextId}`);
+  };
+
+  const handleToggleWorkflow = (id: string) => {
+    setWorkflows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, active: !w.active } : w))
+    );
+  };
+
+  const handleRunWorkflowTest = (id: string) => {
+    const wf = workflows.find((w) => w.id === id);
+    if (!wf) return;
+    const now = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    setWorkflows((prev) =>
+      prev.map((w) =>
+        w.id === id
+          ? { ...w, runsThisMonth: w.runsThisMonth + 1, lastRunAt: "Just now" }
+          : w
+      )
+    );
+    setExecutionLogs((prev) => [
+      {
+        id: `LOG-${900 + prev.length + 1}`,
+        workflowName: wf.name,
+        timestamp: now,
+        outcome: "Simulated",
+        summary: `Executed local simulation: ${wf.action}`,
+      },
+      ...prev,
+    ]);
+    setToast(`Simulated "${wf.name}"`);
+  };
+
+  const handleAddWorkflow = (
+    payload: Omit<WorkflowRule, "id" | "runsThisMonth" | "lastRunAt">
+  ) => {
+    const nextId = `WF-0${workflows.length + 1}`;
+    setWorkflows((prev) => [
+      {
+        ...payload,
+        id: nextId,
+        runsThisMonth: 0,
+        lastRunAt: "Not run yet",
+      },
+      ...prev,
+    ]);
+    setToast(`Created workflow ${nextId}`);
+  };
+
+  return (
+    <div className="min-h-screen flex bg-[#FAFAFC] dark:bg-[#09090D] text-[#0D0D12] dark:text-[#F4F3F8]">
+      <Sidebar
+        activeView={activeView}
+        onSelectView={setActiveView}
+        selectedIndustry={selectedIndustry}
+        onSelectIndustry={setSelectedIndustry}
+        openEnquiriesCount={openEnquiriesCount}
+        pendingTasksCount={pendingTasksCount}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode((d) => !d)}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar
+          activeView={activeView}
+          industryLabel={activeIndustryLabel}
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onQuickCreateTask={() => setShowNewTaskModal(true)}
+        />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto">
+          {activeView === "overview" && (
+            <OverviewView
+              enquiries={visibleEnquiries}
+              tasks={visibleTasks}
+              workflows={visibleWorkflows}
+              onNavigate={setActiveView}
+              onSelectEnquiry={setSelectedEnquiryId}
+              onRunWorkflowTest={handleRunWorkflowTest}
+            />
+          )}
+
+          {activeView === "assistant" && (
+            <AssistantView
+              industryLabel={activeIndustryLabel}
+              enquiries={visibleEnquiries}
+              tasks={visibleTasks}
+              workflows={visibleWorkflows}
+              messages={assistantMessages}
+              onAppendMessage={(msg) =>
+                setAssistantMessages((prev) => [...prev, msg])
+              }
+              onMarkTaskAdded={(msgId) =>
+                setAssistantMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId && m.suggestedTask
+                      ? { ...m, suggestedTask: { ...m.suggestedTask, added: true } }
+                      : m
+                  )
+                )
+              }
+              onMarkWorkflowAdded={(msgId) =>
+                setAssistantMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId && m.suggestedWorkflow
+                      ? {
+                          ...m,
+                          suggestedWorkflow: {
+                            ...m.suggestedWorkflow,
+                            added: true,
+                          },
+                        }
+                      : m
+                  )
+                )
+              }
+              onCreateTaskFromSuggestion={(t) => {
+                const nextId = `TSK-${200 + tasks.length + 1}`;
+                const priority: TaskItem["priority"] =
+                  t.priority === "Urgent" || t.priority === "High"
+                    ? t.priority
+                    : "Normal";
+                setTasks((prev) => [
+                  {
+                    id: nextId,
+                    title: t.title,
+                    department: t.department || "Operations",
+                    priority,
+                    status: "To Do",
+                    assigneeId: TEAM_MEMBERS[0].id,
+                    dueDate: t.dueDate || "Tomorrow",
+                    automatedSource: "AI Assistant",
+                    industry: fallbackIndustry,
+                    subtasks: [],
+                  },
+                  ...prev,
+                ]);
+                setToast(`Added task ${nextId} from AI suggestion`);
+              }}
+              onCreateWorkflowFromSuggestion={(wf) => {
+                handleAddWorkflow({
+                  name: wf.name,
+                  trigger: wf.trigger,
+                  condition: wf.condition || "Always",
+                  action: wf.action,
+                  department: wf.department || "Operations",
+                  active: true,
+                  hoursSavedPerWeek: Number(wf.hoursSavedPerWeek) || 4,
+                  externalConnector: "AI Blueprint (Demo)",
+                  industry: fallbackIndustry,
+                });
+              }}
+            />
+          )}
+
+          {activeView === "enquiries" && (
+            <EnquiriesView
+              enquiries={visibleEnquiries}
+              selectedEnquiryId={selectedEnquiryId}
+              onSelectEnquiry={setSelectedEnquiryId}
+              teamMembers={TEAM_MEMBERS}
+              industryLabel={activeIndustryLabel}
+              activeIndustry={fallbackIndustry}
+              onUpdateEnquiryStatus={handleUpdateEnquiryStatus}
+              onSendReply={handleSendReply}
+              onConvertToTask={handleConvertToTask}
+              onAddEnquiry={handleAddEnquiry}
+            />
+          )}
+
+          {activeView === "tasks" && (
+            <TasksView
+              tasks={visibleTasks}
+              teamMembers={TEAM_MEMBERS}
+              industryLabel={activeIndustryLabel}
+              onUpdateTaskStatus={handleUpdateTaskStatus}
+              onToggleSubtask={handleToggleSubtask}
+              onAddSubtasks={handleAddSubtasks}
+              onDeleteTask={handleDeleteTask}
+              onOpenNewTaskModal={() => setShowNewTaskModal(true)}
+            />
+          )}
+
+          {activeView === "workflows" && (
+            <WorkflowsView
+              workflows={visibleWorkflows}
+              executionLogs={executionLogs}
+              activeIndustry={fallbackIndustry}
+              onToggleWorkflow={handleToggleWorkflow}
+              onRunWorkflowTest={handleRunWorkflowTest}
+              onAddWorkflow={handleAddWorkflow}
+            />
+          )}
+
+          {activeView === "analytics" && (
+            <AnalyticsView
+              enquiries={visibleEnquiries}
+              tasks={visibleTasks}
+              workflows={visibleWorkflows}
+              industryLabel={activeIndustryLabel}
+            />
+          )}
+
+          {activeView === "media" && <MediaStudioView />}
+        </main>
+      </div>
+
+      {/* Global New Task Modal */}
+      {showNewTaskModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-lg bg-white dark:bg-[#14141D] border border-[#E6E4EE] dark:border-[#262638] p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-base font-semibold text-[#0D0D12] dark:text-white">
+                Create Operational Task
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowNewTaskModal(false)}
+                className="p-1.5 text-[#646275] hover:text-[#0D0D12] dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateTaskSubmit} className="space-y-3">
+              <input
+                required
+                type="text"
+                placeholder="Task title"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                className="w-full rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] bg-[#FAF9FC] dark:bg-[#191924] px-3 py-2 text-[13px] text-[#0D0D12] dark:text-white"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Department"
+                  value={newTaskDept}
+                  onChange={(e) => setNewTaskDept(e.target.value)}
+                  className="rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] bg-[#FAF9FC] dark:bg-[#191924] px-3 py-2 text-[13px] text-[#0D0D12] dark:text-white"
+                />
+                <select
+                  value={newTaskPriority}
+                  onChange={(e) =>
+                    setNewTaskPriority(e.target.value as TaskItem["priority"])
+                  }
+                  className="rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] bg-[#FAF9FC] dark:bg-[#191924] px-3 py-2 text-[13px] text-[#0D0D12] dark:text-white"
+                >
+                  <option value="Urgent">Urgent</option>
+                  <option value="High">High</option>
+                  <option value="Normal">Normal</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={newTaskAssignee}
+                  onChange={(e) => setNewTaskAssignee(e.target.value)}
+                  className="rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] bg-[#FAF9FC] dark:bg-[#191924] px-3 py-2 text-[13px] text-[#0D0D12] dark:text-white"
+                >
+                  {TEAM_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Due date"
+                  value={newTaskDue}
+                  onChange={(e) => setNewTaskDue(e.target.value)}
+                  className="rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] bg-[#FAF9FC] dark:bg-[#191924] px-3 py-2 text-[13px] text-[#0D0D12] dark:text-white"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewTaskModal(false)}
+                  className="rounded-md border border-[#DCD9E8] dark:border-[#2A2A3B] px-4 py-2 text-[13px] font-medium text-[#646275] dark:text-[#9D9AB2]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-md bg-[#0D0D12] dark:bg-[#DDD6FE] px-4 py-2 text-[13px] font-medium text-white dark:text-[#0B0B10]"
+                >
+                  Create Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking feedback toast */}
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-5 right-5 z-50 rounded-md bg-[#0D0D12] dark:bg-[#DDD6FE] text-white dark:text-[#0B0B10] px-4 py-2.5 text-[13px] font-medium shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
